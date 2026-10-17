@@ -26,10 +26,8 @@ As alterações em `~/.claude/skills/{plano,work-resume,workflow}` são enviadas
 
 Antes do commit, o script verifica o diff em busca de padrões de segredo (`glpat-`, `ghp_`, `*_TOKEN=...` etc.) e aborta sem enviar nada se achar. O resultado de cada execução fica em `~/.claude/sync-skills.log`.
 
-### Ponto de atenção
+### Observações
 
-O disparo pelo hook com um `Edit` real do Claude Code ainda não foi observado em funcionamento; só foi testado simulando o JSON que o hook recebe. Se, após alterar uma skill, o repositório não atualizar na hora:
-
-1. Abra uma nova sessão do Claude Code ou rode `/hooks`, porque o `settings.json` pode não ser relido durante a sessão.
-2. Confira `~/.claude/sync-skills.log`.
-3. Em último caso, o cron atualiza em até 15 minutos (só roda com o WSL ligado).
+- O hook roda em **primeiro plano** (`~/.claude/sync-skills.sh --hook`). Não usar `nohup ... &` no comando: em segundo plano o script não recebe o JSON do hook no stdin, o filtro por caminho nunca casa e nada é sincronizado.
+- Se uma alteração não aparecer no repositório, confira `~/.claude/sync-skills.log`. Em último caso, o cron atualiza em até 15 minutos (só roda com o WSL ligado).
+- Se o `settings.json` for alterado durante uma sessão do Claude Code, a mudança no hook pode só valer depois de abrir uma nova sessão ou rodar `/hooks`.
