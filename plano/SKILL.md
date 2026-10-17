@@ -125,4 +125,3 @@ correção. Seguir também `superpowers:systematic-debugging` se estiver dispon�
 - Pergunte pouco e só o que muda o plano; o resto vira suposição declarada.
 - Respostas e plano sempre em português.
 - Pedido incompleto não é motivo para travar: monte o modelo com o que há e pergunte só as lacunas.
-<!-- teste do hook -->
