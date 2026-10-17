@@ -2,8 +2,8 @@
 
 Skills pessoais do Claude Code (`~/.claude/skills`).
 
-| Skill | Descrição |
-|---|---|
+| Skill&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Descrição |
+|:---|:---|
 | [`plano`](#plano) | Monta e conduz o pedido de plano (plan mode) no padrão do Bruno: variantes tela, componente e bug. |
 | [`work-resume`](#work-resume) | Relatório diário, semanal ou mensal: cards do Redmine, MRs do GitLab, horas, horas extras, APF, tempo e tokens. |
 | [`task-status`](#task-status) | Visão curta (card em andamento, MR, pipeline e próxima tarefa) e visão completa do dia, com ícones de status. |
