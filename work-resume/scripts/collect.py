@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
 """Coleta cards (Redmine) e MRs (GitLab) do dia para a skill work-resume.
 
-Uso: python3 collect.py <saida.json> [diario|semanal|mensal] [AAAA-MM-DD]
-Janela (America/Sao_Paulo), sempre até agora quando o fim ainda não passou:
-  diario  : 00:01 da data até agora (ou 23:59 se for data passada)
-  semanal : domingo 00:01 a sábado 23:59 da semana que contém a data
-  mensal  : dia 1 00:01 ao último dia do mês 23:59
-Também coleta horas lançadas no Redmine por dia e marca feriados, sábados e domingos.
+Uso: python3 collect.py <saida.json> [AAAA-MM-DD]
+Janela: de 00:01 (America/Sao_Paulo) da data até agora (ou 23:59 se for data passada).
 Nunca imprime chaves/tokens.
 """
 import json, os, re, ssl, sys, urllib.parse, urllib.request
-from calendar import monthrange
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 REDMINE = "https://redmine.verytecnologia.com.br"
 GITLAB = "https://gitlab.seds.com.br/api/v4"
@@ -53,52 +48,6 @@ def hours_between(a, b):
     return round((b - a).total_seconds() / 3600, 2) if a and b else None
 
 
-WEEKDAYS = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"]
-
-
-def easter(y):
-    a, b, c = y % 19, y // 100, y % 100
-    d, e = b // 4, b % 4
-    g = (8 * b + 13) // 25
-    h = (19 * a + b - d - g + 15) % 30
-    j, k = c // 4, c % 4
-    m = (a + 11 * h) // 319
-    r = (2 * e + 2 * j - k - h + m + 32) % 7
-    mo = (h - m + r + 90) // 25
-    return date(y, mo, (h - m + r + mo + 19) % 32)
-
-
-def holidays_for(y, extra):
-    """Feriados nacionais + 09/07 (SP) + pontos facultativos; `extra` = {"MM-DD": nome} do work-resume.json."""
-    e = easter(y)
-    fixed = {(1, 1): "Confraternização Universal", (4, 21): "Tiradentes", (5, 1): "Dia do Trabalho",
-             (7, 9): "Revolução Constitucionalista (SP)", (9, 7): "Independência", (10, 12): "N. Sra. Aparecida",
-             (11, 2): "Finados", (11, 15): "Proclamação da República", (11, 20): "Consciência Negra",
-             (12, 25): "Natal"}
-    out = {date(y, m, d): {"name": n, "kind": "feriado"} for (m, d), n in fixed.items()}
-    out[e - timedelta(days=2)] = {"name": "Sexta-feira Santa", "kind": "feriado"}
-    for delta, n in ((-48, "Carnaval (segunda)"), (-47, "Carnaval (terça)"), (60, "Corpus Christi")):
-        out[e + timedelta(days=delta)] = {"name": n, "kind": "facultativo"}
-    for md, n in extra.items():
-        mm, dd = md.split("-")
-        out[date(y, int(mm), int(dd))] = {"name": n, "kind": "feriado"}
-    return out
-
-
-def paged(url_base, key, headers, gitlab=False, size=100):
-    """Percorre todas as páginas (Redmine: offset/limit; GitLab: page/per_page)."""
-    items, n = [], 0
-    while True:
-        sep = "&" if "?" in url_base else "?"
-        page = f"{url_base}{sep}page={n // size + 1}&per_page={size}" if gitlab else f"{url_base}{sep}offset={n}&limit={size}"
-        data, _ = get(page, headers, gitlab)
-        chunk = data if gitlab else data[key]
-        items += chunk
-        n += len(chunk)
-        if len(chunk) < size:
-            return items
-
-
 def link_card(mr, cards):
     """Liga um MR a um card do dia. Devolve (card_id, origem) ou (None, None).
 
@@ -125,28 +74,17 @@ def link_card(mr, cards):
 
 def main():
     out_path = sys.argv[1]
-    args = sys.argv[2:]
-    period = args.pop(0) if args and args[0] in ("diario", "semanal", "mensal") else "diario"
-    day = datetime.strptime(args[0], "%Y-%m-%d").date() if args else datetime.now(TZ).date()
-    if period == "semanal":
-        first = day - timedelta(days=(day.weekday() + 1) % 7)  # domingo
-        last = first + timedelta(days=6)
-    elif period == "mensal":
-        first, last = day.replace(day=1), day.replace(day=monthrange(day.year, day.month)[1])
-    else:
-        first = last = day
-    start = datetime(first.year, first.month, first.day, 0, 1, tzinfo=TZ)
+    day = datetime.strptime(sys.argv[2], "%Y-%m-%d").date() if len(sys.argv) > 2 else datetime.now(TZ).date()
+    start = datetime(day.year, day.month, day.day, 0, 1, tzinfo=TZ)
     now = datetime.now(TZ)
-    end = min(now, datetime(last.year, last.month, last.day, 23, 59, tzinfo=TZ))
+    end = now if day == now.date() else datetime(day.year, day.month, day.day, 23, 59, tzinfo=TZ)
     try:
         prev = json.load(open(out_path))
         prev = prev if prev.get("window", {}).get("start") == start.isoformat() else {}
     except (OSError, ValueError):
         prev = {}
     result = {
-        "period": period,
         "window": {"start": start.isoformat(), "end": end.isoformat(),
-                   "first_day": first.isoformat(), "last_day": last.isoformat(),
                    "elapsed_hours": hours_between(start, end)},
         "warnings": [], "cards": [], "mrs": [],
     }
@@ -167,21 +105,11 @@ def main():
             ids = {}
             # criados no dia (autor) e concluídos no dia (atribuído ao usuário)
             for field, who in (("created_on", "author_id"), ("closed_on", "assigned_to_id")):
-                q = urllib.parse.urlencode({who: rm_user["id"], "status_id": "*",
+                q = urllib.parse.urlencode({who: rm_user["id"], "status_id": "*", "limit": 100,
                                             field: f"><{start_utc}|{end_utc}"})
-                for i in paged(f"{REDMINE}/issues.json?{q}", "issues", h):
+                data, _ = get(f"{REDMINE}/issues.json?{q}", h)
+                for i in data["issues"]:
                     ids[i["id"]] = i
-            # horas lançadas no período (por dia e por card)
-            q = urllib.parse.urlencode({"user_id": rm_user["id"], "from": first.isoformat(), "to": last.isoformat()})
-            entries = paged(f"{REDMINE}/time_entries.json?{q}", "time_entries", h)
-            result["time_entries"] = [{"date": e["spent_on"], "hours": e["hours"],
-                                       "issue_id": (e.get("issue") or {}).get("id"),
-                                       "project": e["project"]["name"],
-                                       "activity": (e.get("activity") or {}).get("name")} for e in entries]
-            spent_by_card = {}
-            for e in result["time_entries"]:
-                if e["issue_id"]:
-                    spent_by_card[e["issue_id"]] = round(spent_by_card.get(e["issue_id"], 0) + e["hours"], 2)
             for iid in sorted(ids):
                 d, _ = get(f"{REDMINE}/issues/{iid}.json?include=journals", h)
                 i = d["issue"]
@@ -193,7 +121,6 @@ def main():
                     "created_today": start <= created <= end,
                     "closed_today": bool(closed and start <= closed <= end),
                     "estimated_hours": i.get("estimated_hours"), "spent_hours": i.get("spent_hours"),
-                    "spent_in_window": spent_by_card.get(iid, 0),
                     "done_ratio": i.get("done_ratio"), "description": i.get("description", ""),
                 })
     except OSError as e:  # rede/VPN: reaproveita os cards da coleta anterior, se houver
@@ -211,9 +138,9 @@ def main():
             h = {"PRIVATE-TOKEN": gl_token}
             me, _ = get(f"{GITLAB}/user", h, gitlab=True)
             result["gitlab_user"] = me["username"]
-            q = urllib.parse.urlencode({"scope": "all", "author_id": me["id"],
+            q = urllib.parse.urlencode({"scope": "all", "author_id": me["id"], "per_page": 100,
                                         "updated_after": start.astimezone(timezone.utc).isoformat()})
-            mrs = paged(f"{GITLAB}/merge_requests?{q}", None, h, gitlab=True)
+            mrs, _ = get(f"{GITLAB}/merge_requests?{q}", h, gitlab=True)
             for m in mrs:
                 created, merged = parse_dt(m["created_at"]), parse_dt(m.get("merged_at"))
                 created_today = start <= created <= end
@@ -246,32 +173,6 @@ def main():
                 m["card_id"], m["card_link"] = link_card(m, known)
         except OSError as e:  # rede/VPN: não derruba o relatório
             result["warnings"].append(f"GitLab inacessível ({e.__class__.__name__}: {e}); MRs não coletados")
-
-    # ---------- Dias, feriados e horas extras ----------
-    cfg = {}
-    try:
-        cfg = json.load(open(os.path.join(HOME, ".claude", "work-resume.json")))
-    except (OSError, ValueError):
-        pass
-    hol = {}
-    for y in {first.year, last.year}:
-        hol.update(holidays_for(y, cfg.get("extra_holidays", {})))
-    by_day = {}
-    for e in result.get("time_entries", []):
-        by_day[e["date"]] = round(by_day.get(e["date"], 0) + e["hours"], 2)
-    result["days"], d = [], first
-    while d <= last:
-        wd, hd = d.weekday(), hol.get(d)
-        hours = by_day.get(d.isoformat(), 0)
-        extra = wd >= 5 or (hd is not None and hd["kind"] == "feriado")
-        result["days"].append({"date": d.isoformat(), "weekday": WEEKDAYS[wd], "weekend": wd >= 5,
-                               "holiday": hd["name"] if hd else None, "holiday_kind": hd["kind"] if hd else None,
-                               "hours": hours, "overtime_hours": hours if extra else 0,
-                               "future": datetime(d.year, d.month, d.day, tzinfo=TZ) > now})
-        d += timedelta(days=1)
-    result["overtime"] = {"hours": round(sum(x["overtime_hours"] for x in result["days"]), 2),
-                          "days": [x["date"] for x in result["days"] if x["overtime_hours"]],
-                          "total_hours": round(sum(x["hours"] for x in result["days"]), 2)}
 
     json.dump(result, open(out_path, "w"), ensure_ascii=False, indent=1)
     print(f'ok: {len(result["cards"])} cards, {len(result["mrs"])} MRs, {len(result["warnings"])} avisos -> {out_path}')
