@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Coleta cards, MRs e a próxima tarefa da fila (só leitura). Imprime JSON."""
 import json, os, re, subprocess, sys, urllib.parse
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 HOME = os.path.expanduser("~/.claude")
 RM = "redmine.verytecnologia.com.br"
@@ -47,8 +48,15 @@ rm_key = env("redmine.env")["REDMINE_API_KEY"]
 gl_key = env("gitlab.env")
 gl_token = gl_key.get("GITLAB_TOKEN") or next(iter(gl_key.values()))
 uid, guser = cfg["redmine_user_id"], cfg["gitlab_username"]
-today = date.today().isoformat()
+today = datetime.now(ZoneInfo("America/Sao_Paulo")).date().isoformat()  # fuso de SP: em UTC o dia vira às 21h
 warnings = []
+
+
+def is_today(iso):
+    """O Redmine devolve UTC ('...Z'); compara o dia já no fuso de São Paulo."""
+    if not iso:
+        return False
+    return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(ZoneInfo("America/Sao_Paulo")).date().isoformat() == today
 
 
 def redmine(path):
@@ -107,7 +115,10 @@ card_rows = [{
 } for c in sorted(cards.values(), key=lambda c: c["id"])]
 
 nxt = None
-queue = redmine(f"/issues.json?assigned_to_id={uid}&status_id=1&limit=100&sort=id")
+repo = os.path.basename(subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip())
+queue_project = {"auxilio-aluguel": 63}.get(repo)
+# A fila é do projeto da pasta atual: card de outro projeto (ex.: Conseas) não entra.
+queue = redmine(f"/issues.json?assigned_to_id={uid}&status_id=1&limit=100&sort=id" + (f"&project_id={queue_project}" if queue_project else ""))
 for c in (queue or {}).get("issues", []):
     has_mr = any(m["card_id"] == c["id"] for m in mrs)
     if c["id"] != focus and re.match(r"\[(Frontend|Backend|FullStack)", c["subject"]) and not has_mr:
@@ -136,7 +147,7 @@ if "--day" in sys.argv:
     all_mrs = gitlab(f"/merge_requests?author_username={guser}&state=all&per_page=50") or []
     day = []
     for c in pool.get("issues", []):
-        if not ((c.get("created_on") or "").startswith(today) or (c.get("closed_on") or "").startswith(today)):
+        if not (is_today(c.get("created_on")) or is_today(c.get("closed_on"))):
             continue
         mid = next((m for m in all_mrs if re.search(rf"task-{c['id']}\b", m["source_branch"])), None)
         d = redmine(f"/issues/{c['id']}.json") or {}
