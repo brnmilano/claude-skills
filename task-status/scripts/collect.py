@@ -7,7 +7,21 @@ from zoneinfo import ZoneInfo
 HOME = os.path.expanduser("~/.claude")
 RM = "redmine.verytecnologia.com.br"
 RM_IP = "186.250.243.22"
-GL = "https://gitlab.seds.com.br/api/v4/projects/dni%2Fauxilio-aluguel"
+GL_HOST = "https://gitlab.seds.com.br/api/v4"
+GL_CA = os.path.expanduser("~/.config/glab-cli/gitlab.seds.com.br.pem")  # CA autoassinada da SEDS (a mesma do glab)
+# Caminho do projeto no GitLab -> id do projeto no Redmine (fila e visão do dia).
+REDMINE_PROJECTS = {"dni/auxilio-aluguel": 63, "dni/pmas/frontend": 61, "dni/pmas/backend": 61}
+
+
+def gitlab_project_path():
+    """Caminho do projeto GitLab (ex.: dni/pmas/frontend), lido do remote origin; padrão: Auxílio Aluguel."""
+    url = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, text=True).stdout.strip()
+    m = re.search(r"gitlab\.seds\.com\.br[:/](.+?)(?:\.git)?$", url)
+    return m.group(1) if m else "dni/auxilio-aluguel"
+
+
+GL_PATH = gitlab_project_path()
+GL = f"{GL_HOST}/projects/{urllib.parse.quote(GL_PATH, safe='')}"
 
 
 def env(name):
@@ -20,7 +34,9 @@ def env(name):
 
 
 def get(url, header, resolve=None):
-    cmd = ["curl", "-sk", "--max-time", "25", "-H", header]
+    # Verifica o TLS com a CA da SEDS no GitLab; o -k fica só como último recurso (sem a CA instalada).
+    tls = ["--cacert", GL_CA] if url.startswith(GL_HOST) and os.path.exists(GL_CA) else ["-k"]
+    cmd = ["curl", "-s", *tls, "--max-time", "25", "-H", header]
     if resolve:
         cmd += ["--resolve", resolve]
     r = subprocess.run(cmd + [url], capture_output=True, text=True)
@@ -71,6 +87,9 @@ mrs_raw = gitlab(f"/merge_requests?author_username={guser}&state=all&order_by=up
 if mrs_raw is None:
     warnings.append("GitLab não respondeu (VPN ligada?)")
     mrs_raw = []
+elif not isinstance(mrs_raw, list):  # ex.: {"message": "404 Project Not Found"} ou token inválido
+    warnings.append(f"GitLab recusou a consulta em {GL_PATH}: {mrs_raw.get('message') or mrs_raw.get('error')}")
+    mrs_raw = []
 
 mrs = []
 for m in mrs_raw:
@@ -115,8 +134,7 @@ card_rows = [{
 } for c in sorted(cards.values(), key=lambda c: c["id"])]
 
 nxt = None
-repo = os.path.basename(subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip())
-queue_project = {"auxilio-aluguel": 63}.get(repo)
+queue_project = REDMINE_PROJECTS.get(GL_PATH)
 # A fila é do projeto da pasta atual: card de outro projeto (ex.: Conseas) não entra.
 queue = redmine(f"/issues.json?assigned_to_id={uid}&status_id=1&limit=100&sort=id" + (f"&project_id={queue_project}" if queue_project else ""))
 for c in (queue or {}).get("issues", []):
@@ -136,14 +154,13 @@ pending_merge = [c["id"] for c in open_cards if current and c["id"] != current["
 day = None
 if "--day" in sys.argv:
     # Visão completa: todos os cards do usuário no projeto da pasta atual, criados ou fechados hoje.
-    repo = os.path.basename(subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip())
-    project_id = {"auxilio-aluguel": 63}.get(repo)
+    project_id = REDMINE_PROJECTS.get(GL_PATH)
     if "--project" in sys.argv:
         project_id = int(sys.argv[sys.argv.index("--project") + 1])
     if project_id is None:
-        print(json.dumps({"error": f"projeto Redmine desconhecido para '{repo}'; passe --project <id>"}, ensure_ascii=False))
+        print(json.dumps({"error": f"projeto Redmine desconhecido para '{GL_PATH}'; passe --project <id>"}, ensure_ascii=False))
         sys.exit(1)
-    pool = redmine(f"/issues.json?project_id={project_id}&assigned_to_id={uid}&status_id=*&limit=100&sort=id") or {}
+    pool = redmine(f"/issues.json?project_id={project_id}&assigned_to_id={uid}&status_id=*&limit=100&sort=id:desc&updated_on=%3E%3D{today}")  # só o que mexeu hoje; id:desc evita cortar os cards novos or {}
     all_mrs = gitlab(f"/merge_requests?author_username={guser}&state=all&per_page=50") or []
     day = []
     for c in pool.get("issues", []):
