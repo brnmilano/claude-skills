@@ -160,7 +160,7 @@ if "--day" in sys.argv:
     if project_id is None:
         print(json.dumps({"error": f"projeto Redmine desconhecido para '{GL_PATH}'; passe --project <id>"}, ensure_ascii=False))
         sys.exit(1)
-    pool = redmine(f"/issues.json?project_id={project_id}&assigned_to_id={uid}&status_id=*&limit=100&sort=id:desc&updated_on=%3E%3D{today}")  # só o que mexeu hoje; id:desc evita cortar os cards novos or {}
+    pool = redmine(f"/issues.json?project_id={project_id}&assigned_to_id={uid}&status_id=*&limit=100&sort=id:desc&updated_on=%3E%3D{today}") or {}  # só o que mexeu hoje; id:desc evita cortar os cards novos
     all_mrs = gitlab(f"/merge_requests?author_username={guser}&state=all&per_page=50") or []
     day = []
     for c in pool.get("issues", []):
