@@ -54,6 +54,17 @@ Ao invocar o /workflow, executar nesta ordem, sem pular etapas:
 
 O único OK exigido do usuário é o do preview do card (etapa 4); as demais etapas seguem sem pausa, salvo erro.
 
+### Status automático (`/task-status`)
+
+Rodar a skill `task-status` (visão curta, **sem a próxima tarefa da fila**) nestes pontos, sem o usuário pedir:
+
+1. **Antes do preview do card** (etapa 4), logo antes de pedir o OK.
+2. **Depois do push e da abertura do MR** (etapas 6 e 7), numa única exibição.
+3. **Pipeline concluída** (etapa 8), com `success` ou `failed`. Se `failed`, o status vem **ao final** do relato de erro (jobs, trecho do log, correção sugerida), tudo na mesma resposta.
+4. **Merge e fechamento do card** (etapa 9): visão curta, a visão completa do dia (`--day`) e, só aqui, a próxima tarefa da fila.
+
+Nas demais etapas (checagens, prints, criação do card, `stash`/checkout, ciclos de acompanhamento da pipeline) não rodar.
+
 ## Desenvolvimento incremental
 
 Sempre que o /workflow for chamado, deverá rodar os seguintes comandos, antes de seguir para a próxima, rodando nesta ordem:

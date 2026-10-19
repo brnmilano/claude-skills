@@ -119,6 +119,15 @@ correção. Seguir também `superpowers:systematic-debugging` se estiver dispon�
    - **Verificação**: comandos de checagem do projeto + conferência visual nos viewports + o que o Bruno
      confere no navegador. Respeitar quem roda o quê (ex.: "eu rodo as checagens" → só listar os comandos).
 4. Não criar branch, card ou commit na aprovação do plano: isso é o `/workflow`, quando o Bruno pedir.
+5. Antes do `ExitPlanMode` (plano pronto para aprovar), rodar a skill `task-status` (visão curta, **sem a próxima
+   tarefa da fila**) e mostrar o status junto do plano.
+6. Fechar o plano com uma seção **Próximos passos**, que mostra onde o `/plano` termina e o `/workflow` começa:
+   1. Implementação (após a aprovação do plano).
+   2. `/workflow [tempo estimado h:mm]`, quando o Bruno chamar. Em ordem: checagens de qualidade (`tsc`, `eslint`,
+      `vitest`, `build`) → prints (500/768/1920) → preview do card e OK do Bruno → card no Redmine → branch,
+      commit e push → MR no GitLab → pipeline → fechamento do card após o merge.
+   Sugerir o tempo estimado já na seção, para o Bruno poder chamar o `/workflow` direto. Não executar o `/workflow`
+   sem o Bruno pedir.
 
 ## Princípios
 
