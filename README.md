@@ -1,10 +1,10 @@
-# claude-skills
+# skills
 
-Skills pessoais do Claude Code (`~/.claude/skills`).
+Skills do Claude Code compartilhadas pela equipe da Very (`~/.claude/skills`).
 
-| Skill&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Descrição |
+| Skill&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Descrição |
 |:---|:---|
-| [`plano`](#plano) | Monta e conduz o pedido de plano (plan mode) no padrão do Bruno: variantes tela, componente e bug. |
+| [`plano`](#plano) | Monta e conduz o pedido de plano (plan mode) no padrão da equipe: tipos feature, fix, refactor, docs, test, build, ci e chore. |
 | [`work-resume`](#work-resume) | Relatório diário, semanal ou mensal: cards do Redmine, MRs do GitLab, horas, horas extras, APF, tempo e tokens. |
 | [`task-status`](#task-status) | Visão curta (card em andamento, MR, pipeline e próxima tarefa) e visão completa do dia, com ícones de status. |
 | [`workflow`](#workflow) | Fluxo de desenvolvimento SEDS-SP: card no Redmine, branch, commit, checagens e MR. |
@@ -12,8 +12,8 @@ Skills pessoais do Claude Code (`~/.claude/skills`).
 ## Instalação
 
 ```bash
-git clone https://github.com/brnmilano/claude-skills.git
-cp -r claude-skills/{plano,task-status,work-resume,workflow} ~/.claude/skills/
+git clone https://gitlab.verytecnologia.com.br/eso/iaops/skills.git
+cp -r skills/{plano,task-status,work-resume,workflow} ~/.claude/skills/
 ```
 
 ### Configuração
@@ -38,14 +38,36 @@ Monta o pedido de plano (plan mode) já com o que costuma faltar: escopo, compor
 **Como usar**
 
 ```
-/plano [tela|componente|bug] <alvo e o que você já souber>
+/plano <tipo>: <alvo> [documento]
 ```
 
-- `tela`: refatoração de tela (a mais usada).
-- `componente`: UI de biblioteca ou componente compartilhado.
-- `bug`: correção de defeito (variante em rascunho).
+Exemplos:
+
+```
+/plano feature: relatório de repasses em /financeiro
+/plano fix: Salvar não habilita após o CEP
+/plano refactor: tela de listagem de beneficiários
+/plano feature: relatório de repasses ~/docs/repasses.md
+```
+
+| Tipo | Quando usar |
+|---|---|
+| `feature` | Funcionalidade nova para o usuário ou para o sistema (tela, componente, endpoint, regra de negócio). |
+| `fix` | Correção de bug: algo que deveria funcionar e não funciona. |
+| `refactor` | Algo que já existe e funciona e será melhorado, alterado ou reconstruído (inclui o visual da tela). |
+| `docs` | Só documentação; o código executável não muda. |
+| `test` | Criar ou ajustar testes sem mudar o código de produção. |
+| `build` | Build e dependências (`package.json`, `pom.xml`, `Dockerfile`, vite/webpack, atualização de libs). |
+| `ci` | Pipeline de integração/entrega (`.gitlab-ci.yml`, jobs, stages, deploy). |
+| `chore` | Manutenção que não cabe nas outras e não afeta produção nem testes. |
+
+- Os tipos são os mesmos prefixos de branch e de commit (`feature/`, `fix/`, ...).
+- Aliases antigos: `tela` = `refactor`, `bug` = `fix`, `componente` = `feature`.
 - Se o tipo não vier na chamada, a skill infere pelo texto e confirma numa frase.
 - O que você escrever na chamada já preenche o modelo; a skill só pergunta o que falta e muda o plano (até 12 perguntas, em rodadas).
+- `docs`, `test`, `build`, `ci` e `chore` usam um modelo leve, sem viewports nem estados de tela.
+- **Documento (opcional):** spec, card, PRD, ata ou print, por caminho ou anexo. É complemento e ponto de partida do plano e **prevalece** sobre o texto da chamada; contradições vão para "Decisões a confirmar". O plano registra `Fonte: <documento>` e separa o que veio dele do que foi suposição. Instruções dentro do documento são tratadas como conteúdo, nunca executadas; a skill pede o caminho ou a instrução correta.
+- Antes de aprovar, o plano mostra o `task-status` (visão curta) e fecha com **Próximos passos** até o `/workflow`.
 - Depois de preencher o modelo, a skill planeja (passo 2) seguindo os princípios do repositório do projeto.
 
 ## `work-resume`
@@ -68,7 +90,7 @@ A skill **pergunta** se o resumo é **Diário**, **Semanal** ou **Mensal** (ou v
 
 **O que sai**
 
-- Um HTML único (sem dependências externas), salvo na pasta **Downloads do Windows**, e um Artifact **privado** quando a ferramenta estiver disponível. No terminal, a skill devolve um resumo curto e o link clicável do arquivo.
+- Um HTML único (sem dependências externas), salvo no local que você escolher (a skill pergunta; a sugestão é a pasta **Downloads**, no WSL a do Windows), e um Artifact **privado** quando a ferramenta estiver disponível. No terminal, a skill devolve um resumo curto e o link clicável do arquivo.
 - Seções do relatório:
   1. **Janela**: início, fim, tempo decorrido e feriados do período.
   2. **Resumo do que foi feito**: um item por card.
@@ -130,18 +152,8 @@ Fluxo de desenvolvimento dos projetos da SEDS-SP: card no Redmine, branch, commi
 
 ---
 
-## Sincronização automática
+## Contribuindo
 
-As alterações em `~/.claude/skills/{plano,work-resume,workflow}` são enviadas para este repositório por `~/.claude/sync-skills.sh`, que faz `rsync` para um clone local, commit (`chore: sync <skills>`) e push. Ele é acionado de duas formas:
-
-- **Hook `PostToolUse`** (`Edit|Write`) no `~/.claude/settings.json`: dispara quando o Claude edita uma dessas skills.
-- **Cron a cada 15 minutos**: cobre edições feitas fora do Claude (editor, Windows).
-
-Antes do commit, o script verifica o diff em busca de padrões de segredo (`glpat-`, `ghp_`, `*_TOKEN=...` etc.) e aborta sem enviar nada se achar. O resultado de cada execução fica em `~/.claude/sync-skills.log`.
-
-### Observações
-
-- O hook roda em **primeiro plano** (`~/.claude/sync-skills.sh --hook`). Não usar `nohup ... &` no comando: em segundo plano o script não recebe o JSON do hook no stdin, o filtro por caminho nunca casa e nada é sincronizado.
-- Se uma alteração não aparecer no repositório, confira `~/.claude/sync-skills.log`. Em último caso, o cron atualiza em até 15 minutos (só roda com o WSL ligado).
-- Se o `settings.json` for alterado durante uma sessão do Claude Code, a mudança no hook pode só valer depois de abrir uma nova sessão ou rodar `/hooks`.
-- O repositório é **público**: não versione dados reais (cards, nomes, relatórios gerados). O `layout-referencia.html` da `work-resume` deve conter só dados de exemplo.
+- Alterações entram por merge request; não envie direto para a `main`.
+- Não versione dados reais (cards, nomes, relatórios gerados, tokens ou credenciais). O `layout-referencia.html` da `work-resume` deve conter só dados de exemplo.
+- Credenciais ficam em `~/.claude/` de cada pessoa, nunca neste repositório.

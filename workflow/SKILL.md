@@ -235,16 +235,6 @@ Rodar a suíte completa (`npx vitest run`, sem escopo) antes de criar o card par
 - Se o MR foi mesclado mas a pipeline não estiver em `success`, **não** fechar o card: avisar o usuário e aguardar instruções.
 - Ao final, informar o número do card, o link do MR, o link do card e o resultado da conferência (`GET /issues/NNNN.json`). Se algum passo falhar, aplicar as regras de erro do "Fechamento do card" (parar, mostrar o erro, não repetir o `POST /time_entries.json`).
 
-## Usuários específicos
+## Comandos do git
 
-- O usuário `bruno_milano`, possui alias que abreviam os comandos do git, sendo eles:
-  - gcb = git checkout -b
-  - gst = git status --short
-  - ga = git add
-  - gcm = git commit -m
-  - gpl = git pull
-  - gps = git push
-  - gco = git checkout
-  - gd = git diff
-
-- O Claude executa sempre os comandos completos do git. Os alias só valem quando for preciso mostrar um comando para o usuário `bruno_milano` rodar por conta própria (ex.: ao pedir que ele resolva um conflito).
+- O Claude executa sempre os comandos completos do git, e também os mostra completos quando for preciso pedir que a pessoa rode algo por conta própria (ex.: resolver um conflito). Não usar alias pessoais (`gcb`, `gst`, `gcm`...), porque variam de pessoa para pessoa.
